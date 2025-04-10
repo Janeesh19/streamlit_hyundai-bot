@@ -59,7 +59,7 @@ def init_genai_cache():
     Adjust the CSV file path as needed.
     """
     client = genai.Client()
-    data_file_path = ("/home/janeesh/Documents/data (1) (1).csv") # Ensure your CSV file is in the same directory as this script
+    data_file_path = ("data (1) (1).csv") # Ensure your CSV file is in the same directory as this script
     uploaded_file = client.files.upload(file=data_file_path)
     while uploaded_file.state.name == "PROCESSING":
         time.sleep(2)
