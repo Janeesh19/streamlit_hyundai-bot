@@ -112,12 +112,6 @@ if "messages" not in st.session_state:
 # GENERATOR FUNCTION: generate_response_stream
 # ---------------------------------------------------------
 def generate_response_stream(question: str):
-    """
-    Generator function that streams the answer chunks and then yields the final response.
-    Builds the full prompt by combining only the previous 2 exchanges (last 4 messages) with the current question.
-    Post-processes each chunk to remove markdown formatting.
-    """
-    # Use only the last 2 exchanges (4 messages) if available.
     if len(st.session_state.messages) >= 4:
         conversation_context = "\n".join(
             [f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.messages[-4:]]
@@ -128,7 +122,7 @@ def generate_response_stream(question: str):
         )
     
     full_prompt = (conversation_context + "\nCustomer: " + question) if conversation_context else ("Customer: " + question)
-    
+
     response_stream = client.models.generate_content_stream(
         model=model_name,
         contents=full_prompt,
@@ -141,10 +135,11 @@ def generate_response_stream(question: str):
     
     full_text = ""
     for chunk in response_stream:
-        # Remove markdown formatting
-        cleaned_chunk = re.sub(r"```(json)?", "", chunk.text)
+        raw = chunk.text or ""
+        cleaned_chunk = re.sub(r"```(?:json)?", "", raw)
         full_text += cleaned_chunk
-        yield cleaned_chunk  # Stream each chunk
+        yield cleaned_chunk
+
 
 # ---------------------------------------------------------
 # HANDLING THE USER QUERY AND DISPLAYING THE RESPONSE
