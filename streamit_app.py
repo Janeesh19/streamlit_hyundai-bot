@@ -37,7 +37,7 @@ Ensure that your final output is always a valid JSON object with exactly one key
 {
   "answer": "- Bullet point one\n- Bullet point two\n\nSuggested questions:\n• Would you like to know more about financing options?\n• Shall we schedule a test drive?"
 }
-
+"""
 # --------------------------------------------
 # STREAMLIT APP LAYOUT
 # --------------------------------------------
