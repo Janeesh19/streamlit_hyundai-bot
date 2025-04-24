@@ -12,7 +12,7 @@ from google.genai import types
 # SET YOUR CONFIGURATIONS AND KEYS HERE
 # --------------------------------------------
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-model_name = "models/gemini-2.0-flash-001"
+model_name = "models/gemini-1.5-flash-001"
 
 # Base prompt for the Hyundai IONIQ 5 Sales Chatbot.
 base_prompt = """
@@ -25,11 +25,12 @@ Your primary goal is to guide the customer towards making a purchase while ensur
 Engage in a friendly, helpful, and conversational manner, focusing on building rapport and understanding the customer's needs.
 
 **Wherever possible, structure your answers as bullet points** to improve clarity and impact.
-**Keep the answer short and concise , yet informative."
+**Keep the answer short and concise , yet informative.**
 **After your answer to the question, on the next line, suggest any follow-up questions the customer might ask based on the current question.**
 
 *Key Objectives:*
-1. Close the sale by addressing the customer's concerns and creating urgency.
+1. Close the sale by addressing the customer's concerns
+ and creating urgency.
 2. Answer all customer questions thoroughly while keeping the conversation engaging.
 3. Encourage next steps such as scheduling a test drive or discussing financing options.
 
