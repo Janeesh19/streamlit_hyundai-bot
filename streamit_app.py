@@ -12,7 +12,7 @@ from google.genai import types
 # SET YOUR CONFIGURATIONS AND KEYS HERE
 # --------------------------------------------
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-model_name = "models/gemini-2.0-flash-001"
+model_name = "models/gemini-2.0-flash-001"  # Use the same model for both generate and cache
 
 # Base prompt for the Hyundai IONIQ 5 Sales Chatbot.
 base_prompt = """
@@ -66,13 +66,13 @@ def init_genai_cache():
     Adjust the CSV file path as needed.
     """
     client = genai.Client()
-    data_file_path = ("data (1) (1).csv") # Ensure your CSV file is in the same directory as this script
+    data_file_path = ("data (1) (1).csv")  # Ensure your CSV file is in the same directory as this script
     uploaded_file = client.files.upload(file=data_file_path)
     while uploaded_file.state.name == "PROCESSING":
         time.sleep(2)
         uploaded_file = client.files.get(name=uploaded_file.name)
     cache = client.caches.create(
-        model=model_name,
+        model=model_name,  # Ensure you're using the same model for both requests
         config=types.CreateCachedContentConfig(
             display_name="hyundai_sales_data",
             system_instruction=base_prompt,
@@ -126,7 +126,7 @@ def generate_response_stream(question: str):
     full_prompt = (conversation_context + "\nCustomer: " + question) if conversation_context else ("Customer: " + question)
 
     response_stream = client.models.generate_content_stream(
-        model=model_name,
+        model=model_name,  # Ensure the same model is used
         contents=full_prompt,
         config=types.GenerateContentConfig(
             temperature=0.2,
