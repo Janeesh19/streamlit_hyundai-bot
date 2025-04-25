@@ -12,7 +12,7 @@ from google.genai import types
 # SET YOUR CONFIGURATIONS AND KEYS HERE
 # --------------------------------------------
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-model_name = "models/gemini-1.5-flash-001"
+model_name = "models/gemini-2.0-flash"
 
 # Base prompt for the Hyundai IONIQ 5 Sales Chatbot.
 base_prompt = """
