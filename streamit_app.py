@@ -93,7 +93,7 @@ client, cache = init_genai_cache()
 def refresh_cache():
     client.caches.update(
         name=cache.name,
-        config=types.UpdateCachedContentConfig(ttl="3600s")
+        config=types.UpdateCachedContentConfig(ttl="86400s")
     )
 
 def run_scheduler():
@@ -102,7 +102,7 @@ def run_scheduler():
         time.sleep(1)
 
 if "scheduler_started" not in st.session_state:
-    schedule.every(55).minutes.do(refresh_cache)
+    schedule.every(1).day.do(refresh_cache)
     threading.Thread(target=run_scheduler, daemon=True).start()
     st.session_state["scheduler_started"] = True
 
