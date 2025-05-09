@@ -52,6 +52,8 @@ Your key objectives:
 2. Be the customer's trusted expert on the Hyundai IONIQ 5.
 
 If the customer's query is not related to the Hyundai IONIQ 5, politely refuse to answer.
+
+**- IMPORTANT: Output must be a valid JSON object with exactly one key: "answer". Do not include any markdown code fences or extra formatting, and do not include any extraneous text outside the JSON object.**
 """
 # --------------------------------------------
 # STREAMLIT APP LAYOUT
