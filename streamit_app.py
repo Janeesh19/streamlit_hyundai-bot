@@ -78,7 +78,7 @@ def init_genai_cache():
             display_name="hyundai_sales_data",
             system_instruction=base_prompt,
             contents=[uploaded_file],
-            ttl="3600s"
+            ttl="86400s"
         )
     )
     return client, cache
