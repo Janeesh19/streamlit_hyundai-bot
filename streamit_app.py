@@ -35,7 +35,7 @@ Your primary role is to guide the customer towards making a confident and inform
 2. Providing relevant, clear answers,
 3. Keeping the conversation engaging and friendly.
 
-Your tone should be warm, helpful, and professional. Never rush to the end—build rapport as you go. Ensure that your final output is always a valid JSON object with **exactly one key**: `"answer"`.
+Your tone should be warm, helpful, and professional. Never rush to the end—build rapport as you go. Ensure that your final output is always a valid JSON object with **exactly one key**: "answer".
 
 **Session Management:**
 - If the user says goodbye (e.g., "bye", "goodbye", "see you", "talk later"), you must respond with a friendly closing and END the session.
@@ -63,10 +63,6 @@ st.title("Hyundai IONIQ 5 Sales Chatbot")
 # --------------------------------------------
 @st.cache_resource
 def init_genai_cache():
-    """
-    Upload a CSV file and create a cache for the model.
-    Adjust the CSV file path as needed.
-    """
     client = genai.Client()
     data_file_path = "data (1) (1).csv"  # Ensure the CSV is in the same directory
     uploaded_file = client.files.upload(file=data_file_path)
@@ -112,26 +108,17 @@ if "scheduler_started" not in st.session_state:
 # CONVERSATION MANAGEMENT
 # --------------------------------------------
 if "messages" not in st.session_state:
-    # Each message: {"role": "user" or "assistant", "content": ...}
-    st.session_state.messages = []
+    st.session_state.messages = []  # Each message: {"role": "user" or "assistant", "content": ...}
 
 # ---------------------------------------------------------
 # GENERATOR FUNCTION: generate_response_stream
 # ---------------------------------------------------------
 def generate_response_stream(question: str):
-    if len(st.session_state.messages) >= 4:
-        recent = st.session_state.messages[-4:]
-    else:
-        recent = st.session_state.messages
-
+    recent = st.session_state.messages[-4:] if len(st.session_state.messages) >= 4 else st.session_state.messages
     conversation_context = "\n".join(
         f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent
     )
-    full_prompt = (
-        conversation_context + "\nCustomer: " + question
-        if conversation_context else
-        "Customer: " + question
-    )
+    full_prompt = (conversation_context + "\nCustomer: " + question) if conversation_context else ("Customer: " + question)
 
     response_stream = client.models.generate_content_stream(
         model=model_name,
@@ -143,45 +130,34 @@ def generate_response_stream(question: str):
         )
     )
 
-    full_text = ""
     for chunk in response_stream:
         raw = chunk.text or ""
-        cleaned_chunk = re.sub(r"```(?:json)?", "", raw)
-        full_text += cleaned_chunk
-        yield cleaned_chunk
+        # remove markdown fences
+        cleaned = re.sub(r"```(?:json)?", "", raw)
+        # strip any leading "json" label
+        cleaned = re.sub(r"(?i)^json\s*", "", cleaned)
+        yield cleaned
 
 # ---------------------------------------------------------
 # HANDLING THE USER QUERY AND DISPLAYING THE RESPONSE
 # ---------------------------------------------------------
 def handle_user_query(user_query: str):
-    # Append user's message
     st.session_state.messages.append({"role": "user", "content": user_query})
 
-    placeholder = st.empty()
+    # Collect full response
     full_response = ""
-
-    # Stream the answer
     for chunk in generate_response_stream(user_query):
         full_response += chunk
-        placeholder.text(full_response)
 
-    # Extract only the "answer" field
-    answer_text = full_response
+    # Parse out the "answer" field
     try:
         parsed = json.loads(full_response)
-        answer_text = parsed.get("answer", full_response)
+        answer_text = parsed.get("answer", full_response).strip()
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", full_response, re.DOTALL)
-        if match:
-            try:
-                data = json.loads(match.group())
-                answer_text = data.get("answer", full_response)
-            except (json.JSONDecodeError, KeyError):
-                pass
+        answer_text = full_response.strip()
 
-    # Append assistant's clean answer
+    # Append and display only the clean answer
     st.session_state.messages.append({"role": "assistant", "content": answer_text})
-    placeholder.empty()
 
 # --------------------------------------------
 # STREAMLIT CHAT INTERFACE
