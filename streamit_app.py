@@ -146,7 +146,15 @@ user_input = st.chat_input("Ask something about the Hyundai IONIQ 5…")
 if user_input:
     handle_user_query(user_input)
 
-# display the chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        content = msg["content"]
+        # If it looks like JSON, parse & extract "answer"
+        if msg["role"] == "assistant":
+            try:
+                parsed = json.loads(content)
+                st.write(parsed.get("answer", content))
+            except json.JSONDecodeError:
+                st.write(content)
+        else:
+            st.write(content)
