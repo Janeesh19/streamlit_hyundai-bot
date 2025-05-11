@@ -1,4 +1,10 @@
 import streamlit as st
+
+# ───────────────────────────────────────────────────────────────────────
+# Must be the first Streamlit command in your script:
+st.set_page_config(page_title="Hyundai IONIQ 5 Chatbot", layout="centered")
+# ───────────────────────────────────────────────────────────────────────
+
 import os
 import re
 import json
@@ -12,44 +18,58 @@ from google.genai import types
 # SET YOUR CONFIGURATIONS AND KEYS HERE
 # --------------------------------------------
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-model_name = "models/gemini-2.0-flash-001"
+model_name = "models/gemini-2.0-flash-001"  # Use the same model for both generate and cache
 
 # --------------------------------------------
-# BASE PROMPT FOR THE HYUNDAI IONIQ 5 SALES CHATBOT
+# YOUR ORIGINAL BASE PROMPT (UNCHANGED)
 # --------------------------------------------
 base_prompt = """
 You are a professional automotive sales consultant.
 
 VERY IMPORTANT INSTRUCTION:-
-**DO NOT REPLY TO ANY QUESTION ABOUT ANY VEHICLE OTHER THAN THE HYUNDAI IONIQ 5.**
-**STAY FOCUSED ON THE IONIQ 5 ONLY.**
+**DO NOT REPLY TO ANY OF THE QUESTION ANYTIME OTHER THAN IONIQ5. YOU ARE JUST SALES AGENT FOR IONIQ 5. THATS IT.DO NOT GO OUT OF THIS.JUST TALK ABOUT THE CAR**
 
-*IMPORTANT INSTRUCTION:*
-- Use bullet points where necessary, keeping answers short and concise.
-- After your answer, on the next line suggest 1–2 follow-up questions the customer might ask.
-- Do not bullet-point those follow-up suggestions.
-- Always greet the customer warmly before your first answer.
-- Maintain a warm, helpful, professional tone and build rapport.
+*IMPORTANT INSTRUCTION:-*
+**Use bullet points in giving answer about the question where ever necessary.keep it short and concise**
+**after your answer to a question, in the next line suggest 1–2 questions that can help the customer based on the current question.**
+**DON’T ADD SUGGESTED QUESTIONS IN BULLET POINTS.**
 
-Always output exactly one key in your final response JSON: `"answer"`.
+**Always greet the customer warmly before starting any conversation. Do not use structured response formats while greeting.**
 
-Session rules:
-- If the user says “bye”, “goodbye” etc., respond with a friendly closing and end the session.
-- If there is 2 minutes of inactivity, end the session politely.
+Engage naturally in a multi-turn dialogue and always refer to previous conversation details to maintain continuity. Your communication must always be in ENGLISH. If the user asks a question in another language, politely ask them to continue in English.
 
-Your role: guide the customer to a confident purchase decision by understanding their needs, providing clear answers, and building trust.
+Your primary role is to guide the customer towards making a confident and informed decision by:
+1. Understanding their needs,
+2. Providing relevant, clear answers,
+3. Keeping the conversation engaging and friendly.
+
+Your tone should be warm, helpful, and professional. Never rush to the end—build rapport as you go. Ensure that your final output is always a valid JSON object with **exactly one key**: "answer".
+
+**Session Management:**
+- If the user says goodbye (e.g., "bye", "goodbye", "see you", "talk later"), you must respond with a friendly closing and END the session.
+- If the user is inactive for 2 minutes, politely end the session with a goodbye message.
+
+**PRODUCT-SPECIFIC INSTRUCTION (Hyundai IONIQ 5 ONLY):**
+You are representing the Hyundai IONIQ 5.
+Do not answer any questions about other vehicles or unrelated topics. Focus solely on this model—its features, benefits, pricing, performance, interior/exterior, EV technology, financing, warranty, or test-drive process.
+
+Your key objectives:
+1. Close the sale by addressing the customer's concerns and creating a sense of urgency.
+2. Be the customer's trusted expert on the Hyundai IONIQ 5.
+
+If the customer's query is not related to the Hyundai IONIQ 5, politely refuse to answer.
 """
 
 # --------------------------------------------
-# INITIALISE GENAI CLIENT & CACHE (CACHED PER SESSION)
+# INITIALISE GENAI CLIENT & CACHE (cached per session)
 # --------------------------------------------
 @st.cache_resource
 def init_genai_cache():
     client = genai.Client()
-    data_file_path = "data (1) (1).csv"  # your dataset
+    data_file_path = "data (1) (1).csv"  # Ensure this file sits alongside your script
     uploaded_file = client.files.upload(file=data_file_path)
 
-    # wait for the file to finish processing
+    # Wait for processing
     while uploaded_file.state.name == "PROCESSING":
         time.sleep(2)
         uploaded_file = client.files.get(name=uploaded_file.name)
@@ -60,7 +80,7 @@ def init_genai_cache():
             display_name="hyundai_sales_data",
             system_instruction=base_prompt,
             contents=[uploaded_file],
-            ttl="86400s"  # 24 hours
+            ttl="86400s"
         )
     )
     return client, cache
@@ -87,23 +107,23 @@ if "scheduler_started" not in st.session_state:
     st.session_state["scheduler_started"] = True
 
 # --------------------------------------------
-# SET UP CHAT HISTORY
+# CHAT HISTORY INITIALISATION
 # --------------------------------------------
 if "messages" not in st.session_state:
-    st.session_state.messages = []  # each item: {"role": "user"|"assistant", "content": str}
+    st.session_state.messages = []
 
 # --------------------------------------------
-# GENERATE A SINGLE, CLEAN RESPONSE
+# SYNCHRONOUS RESPONSE (NO STREAMING)
 # --------------------------------------------
 def generate_response(question: str) -> str:
-    # assemble the last few turns for context
+    # Build context from last 4 messages
     recent = st.session_state.messages[-4:]
-    conversation = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
-    full_prompt = (conversation + "\nCustomer: " + question) if conversation else "Customer: " + question
+    convo = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
+    prompt = (convo + "\nCustomer: " + question) if convo else "Customer: " + question
 
     resp = client.models.generate_content(
         model=model_name,
-        contents=full_prompt,
+        contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.2,
             top_p=0.1,
@@ -112,35 +132,28 @@ def generate_response(question: str) -> str:
     )
 
     raw = resp.text or ""
-    # strip markdown fences and any leading “json” labels
     cleaned = re.sub(r"```(?:json)?", "", raw)
     cleaned = re.sub(r"(?i)^json\s*", "", cleaned).strip()
     return cleaned
 
 # --------------------------------------------
-# HANDLE A USER QUERY
+# HANDLE USER INPUT
 # --------------------------------------------
 def handle_user_query(user_query: str):
-    # record user message
     st.session_state.messages.append({"role": "user", "content": user_query})
+    full_resp = generate_response(user_query)
 
-    # get the model output
-    full_response = generate_response(user_query)
-
-    # try to parse JSON and extract the answer
     try:
-        parsed = json.loads(full_response)
-        answer_text = parsed.get("answer", "")
+        data = json.loads(full_resp)
+        answer = data.get("answer", "")
     except json.JSONDecodeError:
-        answer_text = full_response
+        answer = full_resp
 
-    # record assistant message
-    st.session_state.messages.append({"role": "assistant", "content": answer_text})
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # --------------------------------------------
-# STREAMLIT UI
+# RENDER UI
 # --------------------------------------------
-st.set_page_config(page_title="Hyundai IONIQ 5 Chatbot", layout="centered")
 st.title("Hyundai IONIQ 5 Sales Chatbot")
 
 if user_input := st.chat_input("Ask something about the Hyundai IONIQ 5…"):
