@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ───────────────────────────────────────────────────────────────────────
-# Must be the first Streamlit command in your script:
+# Must be the very first Streamlit command in your script:
 st.set_page_config(page_title="Hyundai IONIQ 5 Chatbot", layout="centered")
 # ───────────────────────────────────────────────────────────────────────
 
@@ -13,12 +13,6 @@ import schedule
 import threading
 from google import genai
 from google.genai import types
-
-# --------------------------------------------
-# SET YOUR CONFIGURATIONS AND KEYS HERE
-# --------------------------------------------
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-model_name = "models/gemini-2.0-flash-001"  # Use the same model for both generate and cache
 
 # --------------------------------------------
 # YOUR ORIGINAL BASE PROMPT (UNCHANGED)
@@ -60,16 +54,18 @@ Your key objectives:
 If the customer's query is not related to the Hyundai IONIQ 5, politely refuse to answer.
 """
 
+model_name = "models/gemini-2.0-flash-001"
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+
 # --------------------------------------------
-# INITIALISE GENAI CLIENT & CACHE (cached per session)
+# INITIALISE GENAI CLIENT & CACHE ONCE
 # --------------------------------------------
-@st.cache_resource
 def init_genai_cache():
     client = genai.Client()
-    data_file_path = "data (1) (1).csv"  # Ensure this file sits alongside your script
+    data_file_path = "data (1) (1).csv"
     uploaded_file = client.files.upload(file=data_file_path)
 
-    # Wait for processing
+    # wait until processing finishes
     while uploaded_file.state.name == "PROCESSING":
         time.sleep(2)
         uploaded_file = client.files.get(name=uploaded_file.name)
@@ -85,29 +81,33 @@ def init_genai_cache():
     )
     return client, cache
 
-client, cache = init_genai_cache()
+if "client" not in st.session_state:
+    st.session_state.client, st.session_state.cache = init_genai_cache()
+
+client = st.session_state.client
+cache = st.session_state.cache
 
 # --------------------------------------------
 # SCHEDULER TO REFRESH CACHE TTL DAILY
 # --------------------------------------------
-def refresh_cache():
+def _refresh_cache():
     client.caches.update(
         name=cache.name,
         config=types.UpdateCachedContentConfig(ttl="86400s")
     )
 
-def run_scheduler():
+def _run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 if "scheduler_started" not in st.session_state:
-    schedule.every().day.do(refresh_cache)
-    threading.Thread(target=run_scheduler, daemon=True).start()
-    st.session_state["scheduler_started"] = True
+    schedule.every().day.do(_refresh_cache)
+    threading.Thread(target=_run_scheduler, daemon=True).start()
+    st.session_state.scheduler_started = True
 
 # --------------------------------------------
-# CHAT HISTORY INITIALISATION
+# PREPARE CHAT HISTORY
 # --------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -116,10 +116,9 @@ if "messages" not in st.session_state:
 # SYNCHRONOUS RESPONSE (NO STREAMING)
 # --------------------------------------------
 def generate_response(question: str) -> str:
-    # Build context from last 4 messages
     recent = st.session_state.messages[-4:]
-    convo = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
-    prompt = (convo + "\nCustomer: " + question) if convo else "Customer: " + question
+    conversation = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
+    prompt = (conversation + "\nCustomer: " + question) if conversation else "Customer: " + question
 
     resp = client.models.generate_content(
         model=model_name,
@@ -152,7 +151,7 @@ def handle_user_query(user_query: str):
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # --------------------------------------------
-# RENDER UI
+# RENDER THE CHAT UI
 # --------------------------------------------
 st.title("Hyundai IONIQ 5 Sales Chatbot")
 
