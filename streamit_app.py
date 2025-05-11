@@ -1,13 +1,12 @@
 import streamlit as st
 
-# ───────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────
 # Must be the very first Streamlit command in your script:
 st.set_page_config(page_title="Hyundai IONIQ 5 Chatbot", layout="centered")
-# ───────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────
 
 import os
 import re
-import json
 import time
 import schedule
 import threading
@@ -15,7 +14,7 @@ from google import genai
 from google.genai import types
 
 # --------------------------------------------
-# YOUR ORIGINAL BASE PROMPT (UNCHANGED)
+# YOUR ORIGINAL BASE PROMPT (WITH JSON LINE REMOVED)
 # --------------------------------------------
 base_prompt = """
 You are a professional automotive sales consultant.
@@ -37,7 +36,7 @@ Your primary role is to guide the customer towards making a confident and inform
 2. Providing relevant, clear answers,
 3. Keeping the conversation engaging and friendly.
 
-Your tone should be warm, helpful, and professional. Never rush to the end—build rapport as you go. Ensure that your final output is always a valid JSON object with **exactly one key**: "answer".
+Your tone should be warm, helpful, and professional. Never rush to the end—build rapport as you go.
 
 **Session Management:**
 - If the user says goodbye (e.g., "bye", "goodbye", "see you", "talk later"), you must respond with a friendly closing and END the session.
@@ -62,20 +61,17 @@ os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 # --------------------------------------------
 def init_genai_cache():
     client = genai.Client()
-    data_file_path = "data (1) (1).csv"
-    uploaded_file = client.files.upload(file=data_file_path)
-
-    # wait until processing finishes
-    while uploaded_file.state.name == "PROCESSING":
+    data_file = "data (1) (1).csv"
+    uploaded = client.files.upload(file=data_file)
+    while uploaded.state.name == "PROCESSING":
         time.sleep(2)
-        uploaded_file = client.files.get(name=uploaded_file.name)
-
+        uploaded = client.files.get(name=uploaded.name)
     cache = client.caches.create(
         model=model_name,
         config=types.CreateCachedContentConfig(
             display_name="hyundai_sales_data",
             system_instruction=base_prompt,
-            contents=[uploaded_file],
+            contents=[uploaded],
             ttl="86400s"
         )
     )
@@ -85,10 +81,10 @@ if "client" not in st.session_state:
     st.session_state.client, st.session_state.cache = init_genai_cache()
 
 client = st.session_state.client
-cache = st.session_state.cache
+cache  = st.session_state.cache
 
 # --------------------------------------------
-# SCHEDULER TO REFRESH CACHE TTL DAILY
+# REFRESH CACHE TTL DAILY
 # --------------------------------------------
 def _refresh_cache():
     client.caches.update(
@@ -107,18 +103,18 @@ if "scheduler_started" not in st.session_state:
     st.session_state.scheduler_started = True
 
 # --------------------------------------------
-# PREPARE CHAT HISTORY
+# CHAT HISTORY SETUP
 # --------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # --------------------------------------------
-# SYNCHRONOUS RESPONSE (NO STREAMING)
+# GENERATE A SINGLE, PLAIN-TEXT RESPONSE
 # --------------------------------------------
 def generate_response(question: str) -> str:
     recent = st.session_state.messages[-4:]
-    conversation = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
-    prompt = (conversation + "\nCustomer: " + question) if conversation else "Customer: " + question
+    context = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in recent)
+    prompt  = f"{context}\nCustomer: {question}" if context else f"Customer: {question}"
 
     resp = client.models.generate_content(
         model=model_name,
@@ -131,8 +127,13 @@ def generate_response(question: str) -> str:
     )
 
     raw = resp.text or ""
+    # strip any code fences or stray "json" labels
     cleaned = re.sub(r"```(?:json)?", "", raw)
     cleaned = re.sub(r"(?i)^json\s*", "", cleaned).strip()
+    # turn literal "\n" into real newlines
+    cleaned = cleaned.replace("\\n", "\n")
+    # convert markdown bullets into hyphens
+    cleaned = re.sub(r"(?m)^\*\s*", "- ", cleaned)
     return cleaned
 
 # --------------------------------------------
@@ -140,31 +141,8 @@ def generate_response(question: str) -> str:
 # --------------------------------------------
 def handle_user_query(user_query: str):
     st.session_state.messages.append({"role": "user", "content": user_query})
-
-    # 1. Get the raw cleaned response:
-    raw = generate_response(user_query)
-
-    # 2. If it’s a pure JSON blob, pull out the {...} bit
-    m = re.search(r"(\{.*\})", raw, flags=re.DOTALL)
-    json_str = m.group(1) if m else raw
-
-    # 3. Try to parse it
-    try:
-        parsed = json.loads(json_str)
-        answer_text = parsed.get("answer", "")
-    except json.JSONDecodeError:
-        answer_text = raw
-
-    # 4. Post-process escapes and markdown bullets
-    #    - Turn any literal “\n” into real newlines
-    answer_text = answer_text.replace("\\n", "\n")
-    #    - Convert leading “* ” bullets into hyphens
-    answer_text = re.sub(r"(?m)^\*\s*", "- ", answer_text)
-    #    - Strip any stray whitespace
-    answer_text = answer_text.strip()
-
-    # 5. Append the final clean answer
-    st.session_state.messages.append({"role": "assistant", "content": answer_text})
+    answer = generate_response(user_query)
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # --------------------------------------------
 # RENDER THE CHAT UI
