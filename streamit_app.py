@@ -140,15 +140,31 @@ def generate_response(question: str) -> str:
 # --------------------------------------------
 def handle_user_query(user_query: str):
     st.session_state.messages.append({"role": "user", "content": user_query})
-    full_resp = generate_response(user_query)
 
+    # 1. Get the raw cleaned response:
+    raw = generate_response(user_query)
+
+    # 2. If it’s a pure JSON blob, pull out the {...} bit
+    m = re.search(r"(\{.*\})", raw, flags=re.DOTALL)
+    json_str = m.group(1) if m else raw
+
+    # 3. Try to parse it
     try:
-        data = json.loads(full_resp)
-        answer = data.get("answer", "")
+        parsed = json.loads(json_str)
+        answer_text = parsed.get("answer", "")
     except json.JSONDecodeError:
-        answer = full_resp
+        answer_text = raw
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    # 4. Post-process escapes and markdown bullets
+    #    - Turn any literal “\n” into real newlines
+    answer_text = answer_text.replace("\\n", "\n")
+    #    - Convert leading “* ” bullets into hyphens
+    answer_text = re.sub(r"(?m)^\*\s*", "- ", answer_text)
+    #    - Strip any stray whitespace
+    answer_text = answer_text.strip()
+
+    # 5. Append the final clean answer
+    st.session_state.messages.append({"role": "assistant", "content": answer_text})
 
 # --------------------------------------------
 # RENDER THE CHAT UI
