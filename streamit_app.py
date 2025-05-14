@@ -86,13 +86,13 @@ cache  = st.session_state.cache
 # --------------------------------------------
 # REFRESH CACHE TTL DAILY
 # --------------------------------------------
-def _refresh_cache():
-    client.caches.update(
-        name=cache.name,
-        config=types.UpdateCachedContentConfig(ttl="86400s")
+#def _refresh_cache():
+    #client.caches.update(
+        #name=cache.name,
+        #config=types.UpdateCachedContentConfig(ttl="86400s")
     )
 
-def _run_scheduler():
+#def _run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
