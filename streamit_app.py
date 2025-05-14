@@ -59,20 +59,20 @@ os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 # --------------------------------------------
 # INITIALISE GENAI CLIENT & CACHE ONCE
 # --------------------------------------------
-def init_genai_cache():
-    client = genai.Client()
-    data_file = "data (1) (1).csv"
-    uploaded = client.files.upload(file=data_file)
-    while uploaded.state.name == "PROCESSING":
-        time.sleep(2)
-        uploaded = client.files.get(name=uploaded.name)
-    cache = client.caches.create(
-        model=model_name,
-        config=types.CreateCachedContentConfig(
-            display_name="hyundai_sales_data",
-            system_instruction=base_prompt,
-            contents=[uploaded],
-            ttl="86400s"
+#def init_genai_cache():
+ #   client = genai.Client()
+  #  data_file = "data (1) (1).csv"
+   # uploaded = client.files.upload(file=data_file)
+    #while uploaded.state.name == "PROCESSING":
+     #   time.sleep(2)
+      #  uploaded = client.files.get(name=uploaded.name)
+    #cache = client.caches.create(
+      #  model=model_name,
+       # config=types.CreateCachedContentConfig(
+         #   display_name="hyundai_sales_data",
+          #  system_instruction=base_prompt,
+           # contents=[uploaded],
+            #ttl="86400s"
         )
     )
     return client, cache
