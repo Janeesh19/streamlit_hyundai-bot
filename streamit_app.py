@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ────────────────────────────────────────────────────────────────────────
-# Must be the very first Streamlit command in your script:
+# Must be the very first Streamlit command:
 st.set_page_config(page_title="Hyundai IONIQ 5 Chatbot", layout="centered")
 # ────────────────────────────────────────────────────────────────────────
 
@@ -57,26 +57,53 @@ model_name = "models/gemini-2.0-flash-001"
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 # --------------------------------------------
-# INITIALISE GENAI CLIENT & CACHE ONCE
+# FUNCTIONS TO MANAGE A SINGLE CACHE
 # --------------------------------------------
-#def init_genai_cache():
- #   client = genai.Client()
-  #  data_file = "data (1) (1).csv"
-   # uploaded = client.files.upload(file=data_file)
-    #while uploaded.state.name == "PROCESSING":
-     #   time.sleep(2)
-      #  uploaded = client.files.get(name=uploaded.name)
-    #cache = client.caches.create(
-      #  model=model_name,
-       # config=types.CreateCachedContentConfig(
-         #   display_name="hyundai_sales_data",
-          #  system_instruction=base_prompt,
-           # contents=[uploaded],
-            #ttl="86400s"
+def delete_cache(name: str):
+    """Delete the named cache and remove it from session state."""
+    try:
+        client = st.session_state.client
+        client.caches.delete(name=name)
+    except Exception:
+        pass
+    st.session_state.pop("cache", None)
+
+def init_genai_cache():
+    client = genai.Client()
+
+    CACHE_DISPLAY = "hyundai_sales_data"
+
+    # 1) Look for an existing cache
+    for c in client.caches.list():
+        if c.display_name == CACHE_DISPLAY:
+            return client, c
+
+    # 2) Upload the CSV and wait until active
+    data_file = "data (1) (1).csv"
+    uploaded = client.files.upload(file=data_file)
+    while uploaded.state.name == "PROCESSING":
+        time.sleep(2)
+        uploaded = client.files.get(name=uploaded.name)
+
+    # 3) Create a new cache with 30-minute TTL
+    cache = client.caches.create(
+        model=model_name,
+        config=types.CreateCachedContentConfig(
+            display_name=CACHE_DISPLAY,
+            system_instruction=base_prompt,
+            contents=[uploaded],
+            ttl="1800s"    # 30 minutes
         )
     )
+
+    # 4) Schedule automatic deletion in 30 minutes
+    schedule.every(30).minutes.do(lambda: delete_cache(cache.name))
+
     return client, cache
 
+# --------------------------------------------
+# INITIALISE CLIENT & CACHE ONCE
+# --------------------------------------------
 if "client" not in st.session_state:
     st.session_state.client, st.session_state.cache = init_genai_cache()
 
@@ -84,21 +111,14 @@ client = st.session_state.client
 cache  = st.session_state.cache
 
 # --------------------------------------------
-# REFRESH CACHE TTL DAILY
+# RUN THE SCHEDULER IN THE BACKGROUND
 # --------------------------------------------
-#def _refresh_cache():
-    #client.caches.update(
-        #name=cache.name,
-        #config=types.UpdateCachedContentConfig(ttl="86400s")
-    )
-
-#def _run_scheduler():
+def _run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 if "scheduler_started" not in st.session_state:
-    schedule.every().day.do(_refresh_cache)
     threading.Thread(target=_run_scheduler, daemon=True).start()
     st.session_state.scheduler_started = True
 
@@ -127,12 +147,9 @@ def generate_response(question: str) -> str:
     )
 
     raw = resp.text or ""
-    # strip any code fences or stray "json" labels
     cleaned = re.sub(r"```(?:json)?", "", raw)
     cleaned = re.sub(r"(?i)^json\s*", "", cleaned).strip()
-    # turn literal "\n" into real newlines
     cleaned = cleaned.replace("\\n", "\n")
-    # convert markdown bullets into hyphens
     cleaned = re.sub(r"(?m)^\*\s*", "- ", cleaned)
     return cleaned
 
